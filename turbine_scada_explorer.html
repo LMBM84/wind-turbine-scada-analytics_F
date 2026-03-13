@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WTG SCADA — T07 · Vestas V90 · North Sea Array | Audientia</title>
+
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'; frame-src 'none'; object-src 'none';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+
+<style>
+/* ── ROOT ─────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --black:#080808; --offblack:#0f0f0f; --gray:#161616; --gray2:#1e1e1e;
+  --white:#f0ece8; --cream:#e8e4df;
+  --red:#d42020; --red2:#b81818;
+  --muted:#666; --dim:#333;
+  --border:rgba(255,255,255,0.06); --border2:rgba(255,255,255,0.10);
+  /* Chart / data colours – kept distinct from brand */
+  --ch-amber:#e6a817; --ch-teal:#00c9a7; --ch-blue:#5b8dee;
+  --ch-violet:#a78bfa; --ch-green:#4ade80; --ch-red:#e05c5c;
+  --font-display:'Bebas Neue',sans-serif;
+  --font-condensed:'Barlow Condensed',sans-serif;
+  --font-body:'Barlow',sans-serif;
+  --font-mono:'Space Mono',monospace;
+  --ease:cubic-bezier(0.22,1,0.36,1);
+}
+html{scroll-behavior:smooth}
+body{background:var(--black);color:var(--white);font-family:var(--font-mono);font-size:12px;line-height:1.75;overflow-x:hidden}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:var(--black)}::-webkit-scrollbar-thumb{background:var(--red)}
+a{text-decoration:none;color:inherit}
+
+/* Scanline texture */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
+}
+
+/* ── CURSOR ─────────────────────────────────────────────────── */
+#cur{position:fixed;width:8px;height:8px;background:var(--red);border-radius:50%;pointer-events:none;z-index:10000;transform:translate(-50%,-50%);mix-blend-mode:difference}
+#cur-ring{position:fixed;width:32px;height:32px;border:1px solid rgba(212,32,32,0.5);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:all .15s ease}
+
+/* ── SITE NAV ───────────────────────────────────────────────── */
+.site-nav{position:fixed;top:0;width:100%;z-index:1000;padding:18px 48px;display:flex;align-items:center;justify-content:space-between;background:rgba(8,8,8,0.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.nav-logo{font-family:var(--font-display);font-size:20px;letter-spacing:3px}
+.nav-logo span{color:var(--red)}
+.nav-links{display:flex;gap:32px}
+.nav-link{font-family:var(--font-condensed);font-size:var(--text-xs);font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);transition:color .25s;position:relative}
+.nav-link::after{content:'';position:absolute;bottom:-3px;left:0;width:0;height:1px;background:var(--red);transition:width .3s}
+.nav-link:hover{color:var(--white)}.nav-link:hover::after{width:100%}
+.nav-link.active{color:var(--white)}.nav-link.active::after{width:100%}
+
+/* ── PAGE HEADER ────────────────────────────────────────────── */
+header{
+  background:var(--offblack);border-bottom:1px solid var(--border);
+  padding:120px 48px 56px;position:relative;overflow:hidden;
+}
+header::after{
+  content:'SCADA';position:absolute;right:-20px;top:-10px;
+  font-family:var(--font-display);font-size:200px;
+  color:rgba(255,255,255,0.018);pointer-events:none;line-height:1;letter-spacing:-8px;
+}
+.header-meta{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.badge{
+  font-family:var(--font-condensed);font-size:9px;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;padding:4px 12px;border:1px solid var(--border2);color:var(--muted);
+  border-radius:1px;
+}
+.badge.live{border-color:rgba(0,201,167,0.4);color:var(--ch-teal);background:rgba(0,201,167,0.06)}
+.badge.live::before{content:'● ';animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+
+.header-title{
+  font-family:var(--font-display);font-size:clamp(52px,7vw,108px);line-height:.88;
+  color:var(--white);margin-bottom:16px;position:relative;z-index:1;
+}
+.header-title .outline{-webkit-text-stroke:1.5px rgba(240,236,232,0.18);color:transparent}
+.header-title .accent{color:var(--red)}
+
+.header-coords{font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:.5px;position:relative;z-index:1}
+.header-coords b{color:var(--white)}
+
+/* ── TAB NAV ────────────────────────────────────────────────── */
+.tab-nav{
+  background:var(--black);display:flex;overflow-x:auto;
+  border-bottom:1px solid var(--border);scrollbar-width:none;position:sticky;top:57px;z-index:100;
+}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab{
+  flex:1;min-width:140px;padding:16px 18px;cursor:pointer;text-align:center;
+  color:var(--muted);font-family:var(--font-condensed);font-size:9px;font-weight:700;
+  letter-spacing:2.5px;text-transform:uppercase;border-right:1px solid var(--border);
+  transition:all .2s;position:relative;white-space:nowrap;
+}
+.tab:hover{color:var(--white);background:rgba(255,255,255,0.02)}
+.tab.active{color:var(--white);background:rgba(212,32,32,0.04)}
+.tab.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--red)}
+.tab-num{
+  display:block;font-family:var(--font-display);font-size:24px;
+  color:rgba(255,255,255,0.06);margin-bottom:2px;transition:color .2s;line-height:1;
+}
+.tab.active .tab-num{color:rgba(212,32,32,0.25)}
+
+/* ── PANELS ─────────────────────────────────────────────────── */
+.panel{display:none}
+.panel.active{display:block}
+.panel-inner{max-width:1040px;margin:0 auto;padding:48px 24px 72px}
+
+/* ── SECTION EYEBROW ────────────────────────────────────────── */
+.eyebrow{font-family:var(--font-condensed);font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--red);margin-bottom:8px}
+h2{font-family:var(--font-display);font-size:clamp(32px,4vw,52px);line-height:.9;color:var(--white);margin-bottom:24px}
+h2 em{color:var(--ch-amber);font-style:normal}
+
+/* ── STAT GRID ──────────────────────────────────────────────── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:20px}
+.stat-cell{background:var(--offblack);padding:22px 18px;position:relative;overflow:hidden;transition:background .2s}
+.stat-cell:hover{background:var(--gray)}
+.stat-cell::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform .4s}
+.stat-cell:hover::after{transform:scaleX(1)}
+.stat-label{font-family:var(--font-condensed);font-size:8px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.stat-val{font-family:var(--font-display);font-size:38px;line-height:1;margin-bottom:4px}
+.stat-val.amber{color:var(--ch-amber)}.stat-val.teal{color:var(--ch-teal)}
+.stat-val.blue{color:var(--ch-blue)}.stat-val.red{color:var(--ch-red)}
+.stat-val.violet{color:var(--ch-violet)}.stat-val.green{color:var(--ch-green)}
+.stat-sub{font-family:var(--font-mono);font-size:9px;color:var(--muted)}
+
+/* ── CANVAS WRAP ────────────────────────────────────────────── */
+.canvas-wrap{border:1px solid var(--border);background:var(--offblack);margin-bottom:16px;overflow:hidden}
+.canvas-head{
+  background:var(--gray);border-bottom:1px solid var(--border);
+  padding:10px 16px;display:flex;justify-content:space-between;align-items:center;
+  font-family:var(--font-condensed);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+}
+.canvas-head .ch-left{color:var(--muted)}
+.canvas-head .ch-right{font-family:var(--font-mono);font-size:9px;color:var(--dim)}
+canvas{display:block;width:100%}
+
+/* ── TABLE ──────────────────────────────────────────────────── */
+.table-wrap{overflow-x:auto;margin:8px 0 16px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{
+  background:var(--gray);color:var(--muted);padding:10px 14px;text-align:left;
+  font-family:var(--font-condensed);font-size:8px;font-weight:700;letter-spacing:2.5px;
+  text-transform:uppercase;border-bottom:1px solid var(--border);
+}
+td{padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.03);color:var(--white);font-family:var(--font-mono);font-size:10px}
+tr:hover td{background:rgba(255,255,255,0.02)}
+td.v-amber{color:var(--ch-amber)}.v-teal{color:var(--ch-teal)}.v-red{color:var(--ch-red)}
+td.v-muted{color:var(--muted)}.v-blue{color:var(--ch-blue)}.v-green{color:var(--ch-green)}
+.v-violet{color:var(--ch-violet)}
+
+/* ── TWO-COL ────────────────────────────────────────────────── */
+.row-2{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-bottom:16px}
+@media(max-width:640px){.row-2{grid-template-columns:1fr}}
+
+/* ── BLOCK ──────────────────────────────────────────────────── */
+.block{background:var(--offblack);border:1px solid var(--border);padding:20px;margin-bottom:2px}
+.block-title{
+  font-family:var(--font-condensed);font-size:9px;font-weight:700;letter-spacing:2.5px;
+  text-transform:uppercase;color:var(--muted);margin-bottom:14px;
+  padding-bottom:10px;border-bottom:1px solid var(--border);
+}
+
+/* ── SLIDERS ────────────────────────────────────────────────── */
+.slider-row{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.slider-label{font-family:var(--font-condensed);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);width:160px;flex-shrink:0}
+.slider-label span{color:var(--ch-amber);font-family:var(--font-display);font-size:20px;margin-left:6px;vertical-align:middle}
+input[type=range]{flex:1;-webkit-appearance:none;height:2px;background:var(--border2);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--red);cursor:pointer}
+
+/* ── FORMULA ────────────────────────────────────────────────── */
+.formula{
+  background:var(--black);border-left:2px solid var(--ch-amber);
+  padding:12px 16px;font-family:var(--font-mono);font-size:11px;color:var(--ch-amber);
+  margin:12px 0;white-space:pre;overflow-x:auto;
+}
+
+/* ── FAULT PILLS ────────────────────────────────────────────── */
+.fault-pill{display:inline-block;padding:2px 9px;font-family:var(--font-condensed);font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:1px}
+.fault-pill.warn{background:rgba(230,168,23,0.12);color:var(--ch-amber);border:1px solid rgba(230,168,23,0.3)}
+.fault-pill.ok{background:rgba(74,222,128,0.1);color:var(--ch-green);border:1px solid rgba(74,222,128,0.25)}
+.fault-pill.crit{background:rgba(224,92,92,0.12);color:var(--ch-red);border:1px solid rgba(224,92,92,0.3)}
+
+/* ── GITHUB STRIP ───────────────────────────────────────────── */
+.github-strip{
+  background:var(--gray);border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:16px 48px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
+}
+.github-strip-left{display:flex;align-items:center;gap:16px}
+.github-strip-label{font-family:var(--font-condensed);font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted)}
+.github-chip{
+  font-family:var(--font-mono);font-size:9px;padding:4px 12px;
+  border:1px solid var(--border2);color:var(--muted);border-radius:1px;
+  transition:border-color .25s,color .25s;cursor:default;
+}
+.github-chip:hover{border-color:rgba(212,32,32,0.4);color:var(--white)}
+.github-link{
+  font-family:var(--font-condensed);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--red);display:flex;align-items:center;gap:6px;transition:opacity .25s;
+}
+.github-link:hover{opacity:.7}
+
+/* ── FOOTER ─────────────────────────────────────────────────── */
+footer{background:var(--offblack);border-top:1px solid var(--border);padding:40px 48px;display:flex;align-items:center;justify-content:space-between}
+.footer-logo{font-family:var(--font-display);font-size:20px;letter-spacing:3px}
+.footer-logo span{color:var(--red)}
+.footer-copy{font-family:var(--font-mono);font-size:9px;color:var(--dim)}
+.footer-stack{font-family:var(--font-mono);font-size:9px;color:var(--dim)}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────── */
+@media(max-width:900px){
+  .site-nav{padding:14px 20px}.nav-links{display:none}
+  header{padding:80px 20px 40px}
+  .tab-nav{top:53px}
+  .panel-inner{padding:32px 16px 48px}
+  .github-strip{padding:14px 20px}
+  footer{flex-direction:column;gap:12px;text-align:center;padding:28px 20px}
+}
+</style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+  /* ── Shared portfolio styles (inlined — shared.css not required) ── */
+  .nav-hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:6px}
+  .nav-hamburger span{display:block;width:22px;height:2px;background:var(--muted);transition:background .2s}
+  .nav-hamburger:hover span{background:var(--white)}
+  @media(max-width:900px){
+    .nav-hamburger{display:flex}
+    .nav-links{display:none;position:absolute;top:57px;left:0;right:0;flex-direction:column;background:rgba(8,8,8,0.98);border-bottom:1px solid var(--border);padding:12px 0;z-index:999}
+    .nav-links.open{display:flex}
+    .nav-link{padding:10px 24px}
+    .footer-links{display:none}
+  }
+  </style>
+</head>
+<body>
+
+<div id="cur"></div>
+<div id="cur-ring"></div>
+
+<!-- ── SITE NAV ──────────────────────────────────────────────── -->
+<nav class="site-nav solid" id="site-nav">
+  <a class="nav-logo" href="Index.html"><span>A</span>UDIENTIA</a>
+  <div class="nav-links">
+    <a class="nav-link " href="Index.html">Home</a>
+    <a class="nav-link " href="about.html">About</a>
+    <a class="nav-link " href="portfolio.html">Portfolio</a>
+    <a class="nav-link " href="security.html">Security</a>
+    <a class="nav-link " href="ML.html">ML & AI</a>
+    <a class="nav-link " href="iiot_diagrams.html">Diagrams</a>
+    <a class="nav-link " href="DX_Assessment.html">DX</a>
+    <a class="nav-link active" href="turbine_scada_explorer__2_.html">SCADA</a>
+  </div>
+  <button class="nav-hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- ── PAGE HEADER ───────────────────────────────────────────── -->
+<header>
+  <div class="header-meta">
+    <span class="badge live">Online</span>
+    <span class="badge">Vestas V90-3.0MW</span>
+    <span class="badge">Hub: 105m</span>
+    <span class="badge">IEC Class IA</span>
+    <span class="badge">TimescaleDB</span>
+    <span class="badge">FastAPI + Kafka</span>
+  </div>
+  <div class="header-title">
+    WTG T07 —<br/>
+    <span class="outline">NORTH SEA</span><br/>
+    <span class="accent">SCADA</span>
+  </div>
+  <div class="header-coords">
+    <b>56°14′N 5°08′E</b> · Horns Rev 2 Array · Sector 3 · Campaign 2024-Q4
+    &nbsp;·&nbsp; Kelmarsh / La Haute Borne dataset · 10-min resolution
+  </div>
+</header>
+
+<!-- ── GITHUB STRIP ──────────────────────────────────────────── -->
+<div class="github-strip">
+  <div class="github-strip-left">
+    <span class="github-label" style="font-family:var(--font-condensed);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted)">Built on</span>
+    <span class="github-chip">FastAPI</span>
+    <span class="github-chip">TimescaleDB</span>
+    <span class="github-chip">Redpanda/Kafka</span>
+    <span class="github-chip">PyTorch · PyOD</span>
+    <span class="github-chip">React 18 + Deck.gl</span>
+    <span class="github-chip">MLflow</span>
+    <span class="github-chip">K8s + Helm</span>
+  </div>
+  <a class="github-link" href="https://github.com" target="_blank" rel="noopener">
+    <i class="fa-brands fa-github"></i> wind-turbine-scada-analytics-v2 →
+  </a>
+</div>
+
+<!-- ── TAB NAV ───────────────────────────────────────────────── -->
+<nav class="tab-nav">
+  <div class="tab active" onclick="switchTab(0)">
+    <span class="tab-num">01</span>Raw Signal
+  </div>
+  <div class="tab" onclick="switchTab(1)">
+    <span class="tab-num">02</span>Power Curve
+  </div>
+  <div class="tab" onclick="switchTab(2)">
+    <span class="tab-num">03</span>Fault Diary
+  </div>
+  <div class="tab" onclick="switchTab(3)">
+    <span class="tab-num">04</span>Spectral
+  </div>
+  <div class="tab" onclick="switchTab(4)">
+    <span class="tab-num">05</span>Anomaly
+  </div>
+</nav>
+
+<main>
+
+<!-- ========== PANEL 0: RAW SIGNAL ========== -->
+<div class="panel active" id="p0">
+<div class="panel-inner">
+  <div class="eyebrow">10-min SCADA · Q4 2024 · n=288</div>
+  <h2>24 h rolling signal, <em>T07</em></h2>
+
+  <div class="stat-grid">
+    <div class="stat-cell">
+      <div class="stat-label">Avg Wind Speed</div>
+      <div class="stat-val amber">11.4</div>
+      <div class="stat-sub">m/s · hub height</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">Avg Power Out</div>
+      <div class="stat-val teal">2,314</div>
+      <div class="stat-sub">kW · rated 3,000</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">Rotor Speed</div>
+      <div class="stat-val blue">16.2</div>
+      <div class="stat-sub">rpm · rated 16.7</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">Nacelle Temp</div>
+      <div class="stat-val violet">38.7</div>
+      <div class="stat-sub">°C · ambient 4.1°C</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">Availability</div>
+      <div class="stat-val teal">97.2</div>
+      <div class="stat-sub">% · OEM SLA 95%</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-label">Grid Curtailment</div>
+      <div class="stat-val red">3.1</div>
+      <div class="stat-sub">% of potential</div>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <div class="canvas-head">
+      <span class="ch-left">Wind Speed · Power · Rotor RPM · Temp</span>
+      <span class="ch-right">10-min intervals · 24 h window</span>
+    </div>
+    <canvas id="rawCanvas" height="320"></canvas>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th><th>v_hub (m/s)</th><th>P_out (kW)</th><th>RPM</th>
+          <th>T_nacelle (°C)</th><th>T_gearbox (°C)</th><th>Pitch (°)</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="rawBody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ========== PANEL 1: POWER CURVE ========== -->
+<div class="panel" id="p1">
+<div class="panel-inner">
+  <div class="eyebrow">IEC 61400-12-1 · 0.5 m/s bins</div>
+  <h2>Measured vs <em>Contractual</em> power curve</h2>
+
+  <div class="canvas-wrap">
+    <div class="canvas-head">
+      <span class="ch-left">Power Curve Scatter — T07</span>
+      <span class="ch-right">Green = within 2% · Red = underperformance</span>
+    </div>
+    <canvas id="pcCanvas" height="360"></canvas>
+  </div>
+
+  <div class="row-2">
+    <div class="block">
+      <div class="block-title">Bin Statistics</div>
+      <div class="table-wrap" style="margin:0">
+        <table>
+          <thead>
+            <tr><th>Bin (m/s)</th><th>Meas (kW)</th><th>Contract (kW)</th><th>Δ%</th></tr>
+          </thead>
+          <tbody id="pcBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="block">
+      <div class="block-title">Performance KPIs</div>
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr;gap:1px;margin:0;border:none">
+        <div class="stat-cell" style="padding:16px">
+          <div class="stat-label">AEP Loss</div>
+          <div class="stat-val red" style="font-size:28px">−4.2%</div>
+          <div class="stat-sub">vs design</div>
+        </div>
+        <div class="stat-cell" style="padding:16px">
+          <div class="stat-label">Cp at 10 m/s</div>
+          <div class="stat-val amber" style="font-size:28px">0.441</div>
+          <div class="stat-sub">max 0.463</div>
+        </div>
+        <div class="stat-cell" style="padding:16px">
+          <div class="stat-label">Cut-in</div>
+          <div class="stat-val blue" style="font-size:28px">3.5</div>
+          <div class="stat-sub">m/s measured</div>
+        </div>
+        <div class="stat-cell" style="padding:16px">
+          <div class="stat-label">Rated Wind</div>
+          <div class="stat-val teal" style="font-size:28px">13.1</div>
+          <div class="stat-sub">m/s observed</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ========== PANEL 2: FAULT DIARY ========== -->
+<div class="panel" id="p2">
+<div class="panel-inner">
+  <div class="eyebrow">CMS · SCADA fault log · Q4 2024</div>
+  <h2>Event &amp; fault <em>classification</em></h2>
+
+  <div class="canvas-wrap">
+    <div class="canvas-head">
+      <span class="ch-left">Fault Frequency by Category</span>
+      <span class="ch-right">Count · 90-day window</span>
+    </div>
+    <canvas id="faultCanvas" height="220"></canvas>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th><th>Fault Code</th><th>System</th><th>Description</th>
+          <th>Duration</th><th>P_loss (kWh)</th><th>Severity</th><th>Resolution</th>
+        </tr>
+      </thead>
+      <tbody id="faultBody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ========== PANEL 3: SPECTRAL ========== -->
+<div class="panel" id="p3">
+<div class="panel-inner">
+  <div class="eyebrow">CMS Vibration · 25.6 kHz · Blade + Drivetrain</div>
+  <h2>FFT spectrum — main <em>bearing</em> axial</h2>
+
+  <div class="canvas-wrap">
+    <div class="canvas-head">
+      <span class="ch-left">Power Spectral Density — OB + IB Main Bearing</span>
+      <span class="ch-right">Log scale · Hz</span>
+    </div>
+    <canvas id="specCanvas" height="320"></canvas>
+  </div>
+
+  <div class="row-2">
+    <div class="block">
+      <div class="block-title">Bearing Fault Frequencies — BPFO</div>
+      <div class="formula">BPFO = (n/2) · RPM/60 · (1 − Bd/Pd·cos α)
+n = 14 rollers, α = 10°
+@ 16.2 RPM → f_BPFO = 1.74 Hz
+1× = 0.27 Hz (shaft)
+3P = 0.81 Hz (blade pass)</div>
+    </div>
+    <div class="block">
+      <div class="block-title">Detected Peaks</div>
+      <div class="table-wrap" style="margin:0">
+        <table>
+          <thead>
+            <tr><th>Freq (Hz)</th><th>Amplitude (dB)</th><th>Tag</th><th>Status</th></tr>
+          </thead>
+          <tbody id="specBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ========== PANEL 4: ANOMALY ========== -->
+<div class="panel" id="p4">
+<div class="panel-inner">
+  <div class="eyebrow">Z-score · Isolation Forest · Rolling σ</div>
+  <h2>Multivariate <em>anomaly</em> scoring</h2>
+
+  <div class="block" style="margin-bottom:16px">
+    <div class="block-title">Sensitivity Controls</div>
+    <div class="slider-row">
+      <span class="slider-label">Z threshold <span id="zv">2.5</span>σ</span>
+      <input type="range" min="1" max="4" step="0.1" value="2.5" id="zSlider" oninput="updateAnomaly()">
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Window <span id="wv">12</span> pts</span>
+      <input type="range" min="4" max="36" step="2" value="12" id="wSlider" oninput="updateAnomaly()">
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <div class="canvas-head">
+      <span class="ch-left">Anomaly Score — Gearbox Temp Residual</span>
+      <span class="ch-right" id="anomalyCount">— flagged events</span>
+    </div>
+    <canvas id="anomalyCanvas" height="280"></canvas>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Time</th><th>v_hub</th><th>T_gear raw</th>
+          <th>T_gear pred</th><th>Residual</th><th>Z-score</th><th>Flag</th>
+        </tr>
+      </thead>
+      <tbody id="anomalyBody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-logo"><span>A</span>UDIENTIA</div>
+  <div class="footer-links">
+  <a class="footer-link" href="Index.html">Home</a>
+  <a class="footer-link" href="about.html">About</a>
+  <a class="footer-link" href="portfolio.html">Portfolio</a>
+  <a class="footer-link" href="security.html">Security</a>
+  <a class="footer-link" href="ML.html">ML & AI</a>
+  <a class="footer-link" href="iiot_diagrams.html">Diagrams</a>
+  <a class="footer-link" href="DX_Assessment.html">DX</a>
+  <a class="footer-link" href="turbine_scada_explorer__2_.html">SCADA</a>
+  </div>
+  <div class="footer-copy">© 2025 AUDIENTIA // INDUSTRY 4.0 PORTFOLIO</div>
+</footer>
+
+<script>
+// ============================================================
+//  DATA — realistic Vestas V90 SCADA values
+// ============================================================
+const N = 36; // 6 hours of 10-min data (enough for table)
+const FULL_N = 144; // 24 h for canvas
+
+function rng(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+const r = rng(0xdeadbeef);
+const r2 = rng(0xcafebabe);
+
+// Wind speed: Weibull-like, mean ~11.4 m/s
+function genWind(n, seed) {
+  const rr = rng(seed);
+  const v = [];
+  let w = 11.4;
+  for(let i=0;i<n;i++){
+    w += (rr()-0.5)*1.4;
+    w = Math.max(3.5, Math.min(24, w));
+    v.push(+w.toFixed(2));
+  }
+  return v;
+}
+
+const WIND = genWind(FULL_N, 0xfeed);
+const WIND36 = WIND.slice(0, N);
+
+// Power curve from wind (Vestas V90 characteristic)
+function vPower(v) {
+  if(v < 3.5) return 0;
+  if(v >= 13.1) return 3000;
+  const t = (v - 3.5) / (13.1 - 3.5);
+  return Math.round(3000 * Math.pow(t, 2.1) * (1 - 0.015*Math.pow(t-1,2)));
+}
+
+// Contractual power curve bins
+const PC_CONTRACT = [
+  {v:4,kw:70},{v:5,kw:185},{v:6,kw:390},{v:7,kw:690},
+  {v:8,kw:1080},{v:9,kw:1560},{v:10,kw:2080},{v:11,kw:2540},
+  {v:12,kw:2850},{v:13,kw:2980},{v:14,kw:3000},{v:15,kw:3000},
+  {v:16,kw:3000},{v:17,kw:3000},{v:18,kw:3000},{v:19,kw:3000},{v:20,kw:3000}
+];
+
+function measPower(v, scatter) {
+  const base = vPower(v) * (1 - 0.042);
+  return Math.max(0, Math.round(base + (scatter - 0.5)*120));
+}
+
+const rrs = rng(0xabcd);
+const POWER = WIND.map(v => measPower(v, rrs()));
+const POWER36 = POWER.slice(0, N);
+
+const RPM = WIND.map(v => {
+  if(v < 3.5) return 0;
+  if(v >= 13.1) return +(16.2 + (r2()-0.5)*0.3).toFixed(1);
+  return +(3.5 + (v-3.5)/(13.1-3.5)*(16.2-3.5) + (r2()-0.5)*0.4).toFixed(1);
+});
+
+const TNAC = WIND.map((v,i) => {
+  const base = 32 + POWER[i]/3000*12 + (r()-0.5)*3;
+  return +base.toFixed(1);
+});
+
+const TGEAR = WIND.map((v,i) => {
+  const base = 48 + POWER[i]/3000*18 + (r()-0.5)*2;
+  const drift = (i>100 && i<116) ? (i-100)*0.6 : 0;
+  return +(base + drift).toFixed(1);
+});
+
+const PITCH = WIND.map(v => {
+  if(v < 3.5) return +(87 + (r()-0.5)*2).toFixed(1);
+  if(v >= 13.1) return +(15 + (r()-0.5)*1.5).toFixed(1);
+  return +(2 + (r()-0.5)*1.5).toFixed(1);
+});
+
+function tLabel(i) {
+  const base = new Date('2024-11-15T00:00:00Z');
+  base.setMinutes(base.getMinutes() + i*10);
+  return base.toISOString().slice(11,16);
+}
+
+// ── UTILS ────────────────────────────────────────────────────
+function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+function std(arr){ const m=mean(arr); return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/arr.length); }
+function linspace(a,b,n){ const step=(b-a)/(n-1); return Array.from({length:n},(_,i)=>a+i*step); }
+
+// ── CANVAS FONT (consistent across all draws) ────────────────
+const MONO_FONT = "9px 'Space Mono', monospace";
+
+// ── TAB SWITCHING ────────────────────────────────────────────
+let current = 0;
+const panels = ['p0','p1','p2','p3','p4'];
+const tabs = document.querySelectorAll('.tab');
+
+function switchTab(idx) {
+  tabs.forEach(t=>t.classList.remove('active'));
+  panels.forEach(p=>document.getElementById(p).classList.remove('active'));
+  tabs[idx].classList.add('active');
+  document.getElementById(panels[idx]).classList.add('active');
+  current = idx;
+  setTimeout(()=>{
+    if(idx===0){ drawRaw(); fillRawTable(); }
+    if(idx===1){ drawPowerCurve(); fillPCTable(); }
+    if(idx===2){ drawFaultBar(); fillFaultTable(); }
+    if(idx===3){ drawSpectral(); fillSpecTable(); }
+    if(idx===4){ updateAnomaly(); }
+  }, 20);
+}
+
+// ============================================================
+//  PANEL 0: RAW SIGNAL
+// ============================================================
+function drawRaw() {
+  const c = document.getElementById('rawCanvas');
+  const W = c.offsetWidth; const H = 320;
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0,0,W,H);
+
+  const pad = {l:48,r:16,t:20,b:36};
+  const cw = W - pad.l - pad.r;
+  const ch = H - pad.t - pad.b;
+  const n = FULL_N;
+  const sx = i => pad.l + (i/(n-1))*cw;
+
+  // grid
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){
+    const y = pad.t + g*(ch/4);
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+  }
+
+  function series(arr, color, ymin, ymax, dash) {
+    const sy = v => pad.t+ch - (v-ymin)/(ymax-ymin)*ch;
+    ctx.strokeStyle=color; ctx.lineWidth=1.5;
+    if(dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+    ctx.beginPath();
+    arr.forEach((v,i)=>{ i===0?ctx.moveTo(sx(i),sy(v)):ctx.lineTo(sx(i),sy(v)); });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  series(WIND, '#e6a817', 0, 25);
+  series(POWER.map(p=>p/3000*25), '#00c9a7', 0, 25, []);
+  series(TNAC.map(t=>(t-20)/45*25), '#a78bfa', 0, 25, [3,3]);
+
+  // Anomaly region highlight
+  ctx.fillStyle='rgba(212,32,32,0.05)';
+  ctx.fillRect(sx(100),pad.t, sx(116)-sx(100), ch);
+  ctx.strokeStyle='rgba(212,32,32,0.3)'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+  ctx.strokeRect(sx(100),pad.t, sx(116)-sx(100), ch);
+  ctx.setLineDash([]);
+  ctx.fillStyle='#d42020'; ctx.font=MONO_FONT;
+  ctx.fillText('ANOMALY', sx(101), pad.t+12);
+
+  ctx.fillStyle='#555'; ctx.font=MONO_FONT;
+  ctx.fillText('25 m/s', 0, pad.t+8);
+  ctx.fillText('0', 4, pad.t+ch+2);
+
+  const leg = [['Wind (m/s)','#e6a817'],['Power (×3MW)','#00c9a7'],['T_nacelle','#a78bfa']];
+  leg.forEach(([lbl,col],i)=>{
+    ctx.fillStyle=col;
+    ctx.fillRect(pad.l+i*110, H-14, 16, 2);
+    ctx.font=MONO_FONT; ctx.fillText(lbl, pad.l+i*110+20, H-8);
+  });
+}
+
+function fillRawTable() {
+  const tbody = document.getElementById('rawBody');
+  tbody.innerHTML = '';
+
+  // Pre-compute z-scores for gearbox temp to drive status column
+  const mT = mean(TGEAR.slice(0, N)), sT = std(TGEAR.slice(0, N)) || 1;
+
+  WIND36.forEach((v,i)=>{
+    const p=POWER36[i],rp=RPM[i],tn=TNAC[i],tg=TGEAR[i],pi=PITCH[i];
+    const zGear = Math.abs((tg - mT) / sT);
+    const st = zGear > 2.2 ? 'WARN' : 'OK';
+    tbody.innerHTML+=`<tr>
+      <td class="v-muted">${tLabel(i)}</td>
+      <td class="v-amber">${v}</td>
+      <td class="v-teal">${p.toLocaleString()}</td>
+      <td class="v-blue">${rp}</td>
+      <td>${tn}</td>
+      <td class="${tg>55?'v-red':''}">${tg}</td>
+      <td>${pi}</td>
+      <td class="${st==='OK'?'v-teal':'v-amber'}">${st}</td>
+    </tr>`;
+  });
+}
+
+// ============================================================
+//  PANEL 1: POWER CURVE
+// ============================================================
+function binData() {
+  const bins = {};
+  WIND.forEach((v,i) => {
+    const b = (Math.round(v*2)/2).toFixed(1);
+    if(!bins[b]) bins[b] = [];
+    bins[b].push(POWER[i]);
+  });
+  return Object.keys(bins).sort((a,b)=>+a-+b).map(b=>({v:+b,meas:Math.round(mean(bins[b])),n:bins[b].length}));
+}
+
+function drawPowerCurve() {
+  const c = document.getElementById('pcCanvas');
+  const W = c.offsetWidth; const H = 360;
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0,0,W,H);
+
+  const pad = {l:54,r:20,t:20,b:44};
+  const cw = W-pad.l-pad.r, ch = H-pad.t-pad.b;
+  const vmin=0,vmax=25,pmin=0,pmax=3200;
+  const sx = v => pad.l + (v-vmin)/(vmax-vmin)*cw;
+  const sy = p => pad.t+ch - (p-pmin)/(pmax-pmin)*ch;
+
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1;
+  [0,500,1000,1500,2000,2500,3000].forEach(p=>{
+    ctx.beginPath(); ctx.moveTo(pad.l,sy(p)); ctx.lineTo(W-pad.r,sy(p)); ctx.stroke();
+    ctx.fillStyle='#444'; ctx.font=MONO_FONT;
+    ctx.fillText(p===3000?'3MW':p+'',2,sy(p)+3);
+  });
+  [0,5,10,15,20,25].forEach(v=>{
+    ctx.beginPath(); ctx.moveTo(sx(v),pad.t); ctx.lineTo(sx(v),pad.t+ch); ctx.stroke();
+    ctx.fillStyle='#444'; ctx.font=MONO_FONT;
+    ctx.fillText(v,sx(v)-6,pad.t+ch+14);
+  });
+
+  ctx.strokeStyle='#5b8dee'; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+  ctx.beginPath();
+  PC_CONTRACT.forEach((pt,i)=>i===0?ctx.moveTo(sx(pt.v),sy(pt.kw)):ctx.lineTo(sx(pt.v),sy(pt.kw)));
+  ctx.stroke(); ctx.setLineDash([]);
+
+  ctx.strokeStyle='rgba(230,168,23,0.2)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad.l,sy(3000)); ctx.lineTo(W-pad.r,sy(3000)); ctx.stroke();
+
+  WIND.forEach((v,i) => {
+    const p = POWER[i];
+    const contract = vPower(v);
+    const pct = (contract > 0) ? (p-contract)/contract : 0;
+    const underperf = pct < -0.04;
+    ctx.fillStyle = underperf ? 'rgba(212,32,32,0.6)' : 'rgba(74,222,128,0.5)';
+    ctx.beginPath(); ctx.arc(sx(v),sy(p),3,0,Math.PI*2); ctx.fill();
+  });
+
+  ctx.fillStyle='#444'; ctx.font=MONO_FONT;
+  ctx.fillText('Wind speed (m/s)', pad.l+cw/2-40, H-4);
+  ctx.save(); ctx.translate(12, pad.t+ch/2+20); ctx.rotate(-Math.PI/2);
+  ctx.fillText('Power output (kW)', 0, 0); ctx.restore();
+
+  ctx.font=MONO_FONT;
+  ctx.strokeStyle='#5b8dee'; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(pad.l,H-12); ctx.lineTo(pad.l+24,H-12); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#5b8dee'; ctx.fillText('Contractual', pad.l+28, H-8);
+  ctx.fillStyle='#4ade80'; ctx.fillText('● ≥−4%', pad.l+110, H-8);
+  ctx.fillStyle='#d42020'; ctx.fillText('● <−4% loss', pad.l+170, H-8);
+}
+
+function fillPCTable() {
+  const bins = binData();
+  const tbody = document.getElementById('pcBody');
+  tbody.innerHTML = '';
+  bins.slice(0,14).forEach(({v,meas}) => {
+    const contract = vPower(v);
+    const delta = contract > 0 ? ((meas-contract)/contract*100).toFixed(1) : '—';
+    const cls = +delta < -4 ? 'v-red' : +delta > 0 ? 'v-green' : '';
+    tbody.innerHTML+=`<tr>
+      <td>${v.toFixed(1)}–${(v+0.5).toFixed(1)}</td>
+      <td class="v-teal">${meas.toLocaleString()}</td>
+      <td class="v-blue">${contract.toLocaleString()}</td>
+      <td class="${cls}">${delta}%</td>
+    </tr>`;
+  });
+}
+
+// ============================================================
+//  PANEL 2: FAULT DIARY
+// ============================================================
+const FAULTS = [
+  {ts:'2024-10-02 03:14',code:'F2831',sys:'Pitch',desc:'Blade B pitch encoder timeout',dur:'00:08',loss:412,sev:'warn',res:'Auto-reset'},
+  {ts:'2024-10-07 18:44',code:'F1104',sys:'Grid',desc:'Grid frequency excursion >50.5Hz',dur:'00:02',loss:92,sev:'ok',res:'Auto-reset'},
+  {ts:'2024-10-11 09:21',code:'F3307',sys:'Gearbox',desc:'HSS bearing Δtemp >8°C/hr',dur:'00:45',loss:2140,sev:'warn',res:'Manual inspection'},
+  {ts:'2024-10-19 22:03',code:'F5512',sys:'Generator',desc:'Stator temp exceed 155°C',dur:'01:12',loss:3600,sev:'crit',res:'Cooling fan replaced'},
+  {ts:'2024-10-28 14:55',code:'F2201',sys:'Yaw',desc:'Yaw brake slip >3°',dur:'00:06',loss:180,sev:'warn',res:'Auto-reset'},
+  {ts:'2024-11-04 07:33',code:'F1104',sys:'Grid',desc:'Grid frequency excursion',dur:'00:01',loss:41,sev:'ok',res:'Auto-reset'},
+  {ts:'2024-11-10 02:18',code:'F4401',sys:'CMS',desc:'Rotor imbalance 1P amplitude >3 mm/s',dur:'02:30',loss:7480,sev:'crit',res:'Blade inspection Q'},
+  {ts:'2024-11-12 11:05',code:'F2831',sys:'Pitch',desc:'Blade C pitch encoder timeout',dur:'00:11',loss:540,sev:'warn',res:'Auto-reset'},
+  {ts:'2024-11-14 23:41',code:'F3307',sys:'Gearbox',desc:'HSS bearing Δtemp anomaly',dur:'01:45',loss:5250,sev:'warn',res:'Oil sampling ordered'},
+  {ts:'2024-11-15 04:52',code:'F6600',sys:'Safety',desc:'Emergency stop — grid fault',dur:'00:04',loss:190,sev:'ok',res:'Auto-reset'},
+];
+
+const FAULT_CATS = {
+  Pitch:    {count:3,color:'#e6a817'},
+  Grid:     {count:3,color:'#5b8dee'},
+  Gearbox:  {count:2,color:'#d42020'},
+  Generator:{count:1,color:'#a78bfa'},
+  CMS:      {count:1,color:'#00c9a7'},
+  Yaw:      {count:1,color:'#4ade80'},
+  Safety:   {count:1,color:'#555'},
+};
+
+function drawFaultBar() {
+  const c = document.getElementById('faultCanvas');
+  const W = c.offsetWidth; const H = 220;
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0,0,W,H);
+
+  const cats = Object.entries(FAULT_CATS);
+  const pad = {l:80,r:20,t:20,b:30};
+  const cw = W-pad.l-pad.r;
+  const maxC = Math.max(...cats.map(([,v])=>v.count));
+  const bh = (H-pad.t-pad.b) / cats.length - 4;
+
+  cats.forEach(([name,{count,color}],i) => {
+    const y = pad.t + i*(bh+4);
+    const bw = (count/maxC)*cw;
+    ctx.fillStyle = color+'18';
+    ctx.fillRect(pad.l, y, cw, bh);
+    ctx.fillStyle = color+'88';
+    ctx.fillRect(pad.l, y, bw, bh);
+    ctx.fillStyle = color;
+    ctx.fillRect(pad.l, y, Math.min(3, bw), bh);
+    ctx.fillStyle='#ccc'; ctx.font=MONO_FONT;
+    ctx.textAlign='right';
+    ctx.fillText(name, pad.l-8, y+bh/2+4);
+    ctx.textAlign='left';
+    ctx.fillStyle=color;
+    ctx.fillText(count, pad.l+bw+6, y+bh/2+4);
+  });
+  ctx.textAlign='left';
+}
+
+function fillFaultTable() {
+  const tbody = document.getElementById('faultBody');
+  tbody.innerHTML = '';
+  FAULTS.forEach(f => {
+    tbody.innerHTML+=`<tr>
+      <td class="v-muted">${f.ts}</td>
+      <td class="v-amber">${f.code}</td>
+      <td>${f.sys}</td>
+      <td>${f.desc}</td>
+      <td class="v-muted">${f.dur}</td>
+      <td class="${f.loss>3000?'v-red':'v-muted'}">${f.loss.toLocaleString()}</td>
+      <td><span class="fault-pill ${f.sev}">${f.sev.toUpperCase()}</span></td>
+      <td class="v-muted">${f.res}</td>
+    </tr>`;
+  });
+}
+
+// ============================================================
+//  PANEL 3: SPECTRAL (synthetic FFT)
+// ============================================================
+const SPEC_PEAKS = [
+  {f:0.27, amp:-18.4, tag:'1× shaft'},
+  {f:0.54, amp:-28.1, tag:'2× shaft'},
+  {f:0.81, amp:-22.7, tag:'3P blade pass'},
+  {f:1.74, amp:-11.2, tag:'BPFO main bearing ⚠'},
+  {f:3.48, amp:-31.0, tag:'2× BPFO'},
+  {f:8.21, amp:-38.4, tag:'Mesh freq'},
+  {f:16.0, amp:-42.1, tag:'2× mesh'},
+];
+
+function syntheticFFT(n) {
+  const freqs = linspace(0, 25.6, n);
+  const rff = rng(0xfeed);
+  const noise = freqs.map(() => -55 + (rff()-0.5)*8);
+  SPEC_PEAKS.forEach(({f,amp}) => {
+    const idx = Math.round(f/25.6*n);
+    for(let d=-3;d<=3;d++){
+      if(idx+d>=0 && idx+d<n){
+        const gauss = amp * Math.exp(-d*d/2);
+        if(gauss > noise[idx+d]) noise[idx+d] = gauss;
+      }
+    }
+  });
+  return {freqs, psd: noise};
+}
+
+function drawSpectral() {
+  const {freqs, psd} = syntheticFFT(512);
+  const c = document.getElementById('specCanvas');
+  const W = c.offsetWidth; const H = 320;
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0f0f0f'; ctx.fillRect(0,0,W,H);
+
+  const pad = {l:50,r:16,t:20,b:44};
+  const cw = W-pad.l-pad.r, ch = H-pad.t-pad.b;
+  const fmin=-60, fmax=0;
+  const sx = v => pad.l + (v/25.6)*cw;
+  const sy = v => pad.t+ch - (v-fmin)/(fmax-fmin)*ch;
+
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1;
+  [-60,-50,-40,-30,-20,-10,0].forEach(db=>{
+    ctx.beginPath(); ctx.moveTo(pad.l,sy(db)); ctx.lineTo(W-pad.r,sy(db)); ctx.stroke();
+    ctx.fillStyle='#444'; ctx.font=MONO_FONT;
+    ctx.fillText(db+'dB',2,sy(db)+3);
+  });
+  [0,5,10,15,20,25].forEach(f=>{
+    ctx.beginPath(); ctx.moveTo(sx(f),pad.t); ctx.lineTo(sx(f),pad.t+ch); ctx.stroke();
+    ctx.fillStyle='#444'; ctx.font=MONO_FONT;
+    ctx.fillText(f,sx(f)-6,pad.t+ch+14);
+  });
+
+  ctx.beginPath();
+  ctx.moveTo(sx(freqs[0]),pad.t+ch);
+  freqs.forEach((f,i)=>ctx.lineTo(sx(f),sy(psd[i])));
+  ctx.lineTo(sx(freqs[freqs.length-1]),pad.t+ch);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0,pad.t,0,pad.t+ch);
+  grad.addColorStop(0,'rgba(0,201,167,0.3)');
+  grad.addColorStop(1,'rgba(0,201,167,0.02)');
+  ctx.fillStyle=grad; ctx.fill();
+
+  ctx.strokeStyle='#00c9a7'; ctx.lineWidth=1.2;
+  ctx.beginPath();
+  freqs.forEach((f,i)=>i===0?ctx.moveTo(sx(f),sy(psd[i])):ctx.lineTo(sx(f),sy(psd[i])));
+  ctx.stroke();
+
+  SPEC_PEAKS.forEach(({f,amp,tag})=>{
+    const px=sx(f), py=sy(amp);
+    const isAlert = tag.includes('⚠');
+    ctx.strokeStyle=isAlert?'#d42020':'#e6a817';
+    ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(px,pad.t); ctx.lineTo(px,pad.t+ch); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=isAlert?'#d42020':'#e6a817';
+    ctx.font=MONO_FONT;
+    ctx.fillText(tag.replace(' ⚠',''), px+2, py-6);
+    ctx.beginPath(); ctx.arc(px,py,3,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  ctx.fillStyle='#444'; ctx.font=MONO_FONT;
+  ctx.fillText('Frequency (Hz)', pad.l+cw/2-40, H-4);
+}
+
+function fillSpecTable() {
+  const tbody = document.getElementById('specBody');
+  tbody.innerHTML = '';
+  SPEC_PEAKS.forEach(({f,amp,tag})=>{
+    const isAlert = tag.includes('⚠');
+    tbody.innerHTML+=`<tr>
+      <td class="v-amber">${f.toFixed(2)}</td>
+      <td class="${isAlert?'v-red':'v-teal'}">${amp.toFixed(1)}</td>
+      <td>${tag.replace(' ⚠','')}</td>
+      <td><span class="fault-pill ${isAlert?'crit':'ok'}">${isAlert?'WATCH':'NOMINAL'}</span></td>
+    </tr>`;
+  });
+}
+
+// ============================================================
+//  PANEL 4: ANOMALY
+// ============================================================
+function updateAnomaly() {
+  const z = parseFloat(document.getElementById('zSlider').value);
+  const w = parseInt(document.getElementById('wSlider').value);
+  document.getElementById('zv').textContent = z.toFixed(1);
+  document.getElementById('wv').textContent = w;
+
+  const mP=mean(POWER), sPow=std(POWER);
+  const mT=mean(TGEAR), sT=std(TGEAR);
+  const corr=POWER.reduce((a,p,i)=>a+(p-mP)*(TGEAR[i]-mT),0)/(POWER.length*sPow*sT);
+  const slope=corr*(sT/sPow);
+  const intercept=mT-slope*mP;
+  const pred=POWER.map(p=>slope*p+intercept);
+  const resid=TGEAR.map((t,i)=>t-pred[i]);
+
+  const zScores=resid.map((r2,i)=>{
+    const start=Math.max(0,i-w+1);
+    const win=resid.slice(start,i+1);
+    const rm=mean(win), rs=std(win)||1;
+    return (r2-rm)/rs;
+  });
+
+  const flagged=zScores.filter(z2=>Math.abs(z2)>z).length;
+  document.getElementById('anomalyCount').textContent=`${flagged} flagged events`;
+
+  drawAnomaly(resid, zScores, pred, z);
+
+  const tbody=document.getElementById('anomalyBody');
+  tbody.innerHTML='';
+  WIND36.forEach((v,i)=>{
+    const flag=Math.abs(zScores[i])>z;
+    tbody.innerHTML+=`<tr>
+      <td class="v-muted">${i+1}</td>
+      <td class="v-muted">${tLabel(i)}</td>
+      <td class="v-amber">${v}</td>
+      <td>${TGEAR[i]}</td>
+      <td class="v-muted">${pred[i].toFixed(1)}</td>
+      <td class="${resid[i]>3?'v-red':resid[i]<-3?'v-blue':''}">${resid[i].toFixed(2)}</td>
+      <td class="${flag?'v-red':''}">${zScores[i].toFixed(2)}</td>
+      <td>${flag?'<span class="fault-pill warn">FLAG</span>':'<span class="fault-pill ok">OK</span>'}</td>
+    </tr>`;
+  });
+}
+
+function drawAnomaly(resid, zScores, pred, zThresh) {
+  const c=document.getElementById('anomalyCanvas');
+  const W=c.offsetWidth; const H=280;
+  c.width=W; c.height=H;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#0f0f0f'; ctx.fillRect(0,0,W,H);
+
+  const pad={l:48,r:16,t:20,b:36};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const n=FULL_N;
+  const mx=Math.max(...zScores.map(Math.abs));
+  const ymax=Math.max(mx,zThresh)+0.5;
+  const sx=i=>pad.l+(i/(n-1))*cw;
+  const sy=v=>pad.t+ch/2-(v/ymax)*(ch/2);
+
+  ctx.strokeStyle='#222'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t+ch/2); ctx.lineTo(W-pad.r,pad.t+ch/2); ctx.stroke();
+
+  const ty=sy(zThresh);
+  ctx.fillStyle='rgba(212,32,32,0.04)';
+  ctx.fillRect(pad.l,pad.t,cw,ty-pad.t);
+  ctx.fillRect(pad.l,pad.t+ch-(ty-pad.t),cw,ty-pad.t);
+  ctx.strokeStyle='rgba(212,32,32,0.3)'; ctx.lineWidth=1; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(pad.l,ty); ctx.lineTo(W-pad.r,ty); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t+ch-(ty-pad.t)); ctx.lineTo(W-pad.r,pad.t+ch-(ty-pad.t)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(212,32,32,0.6)'; ctx.font=MONO_FONT;
+  ctx.fillText(`+${zThresh.toFixed(1)}σ`, W-pad.r-30, ty-3);
+
+  const bw=Math.max(1,cw/n-1);
+  zScores.forEach((z2,i)=>{
+    const flag=Math.abs(z2)>zThresh;
+    ctx.fillStyle=flag?'rgba(212,32,32,0.85)':'rgba(91,141,238,0.45)';
+    const barH=Math.abs(z2/ymax)*(ch/2);
+    const y=z2>=0?pad.t+ch/2-barH:pad.t+ch/2;
+    ctx.fillRect(sx(i)-bw/2,y,bw,barH);
+  });
+
+  ctx.fillStyle='#444'; ctx.font=MONO_FONT;
+  ctx.fillText(`+${ymax.toFixed(0)}σ`, 2, pad.t+10);
+  ctx.fillText('0', 8, pad.t+ch/2+4);
+  ctx.fillText(`−${ymax.toFixed(0)}σ`, 2, pad.t+ch-2);
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+window.addEventListener('load', ()=>{
+  drawRaw();
+  fillRawTable();
+});
+window.addEventListener('resize', ()=>{
+  if(current===0) drawRaw();
+  if(current===1) drawPowerCurve();
+  if(current===2) drawFaultBar();
+  if(current===3) drawSpectral();
+  if(current===4) updateAnomaly();
+});
+</script>
+<script>
+// ── UNIFIED CURSOR ─────────────────────────────────────────
+(function(){
+  const cur = document.getElementById('cur');
+  const ring = document.getElementById('cur-ring');
+  if(!cur||!ring) return;
+  let mx=0,my=0,rx=0,ry=0;
+  document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px'});
+  (function raf(){rx+=(mx-rx)*.13;ry+=(my-ry)*.13;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(raf)})();
+})();
+
+// ── NAV SCROLL ─────────────────────────────────────────────
+(function(){
+  const nav = document.querySelector('.site-nav');
+  if(!nav) return;
+  function check(){ nav.classList.toggle('scrolled', window.scrollY > 50); }
+  window.addEventListener('scroll', check);
+  check();
+})();
+
+// ── SCROLL ANIMATIONS ──────────────────────────────────────
+(function(){
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if(e.isIntersecting) e.target.classList.add('on');
+  }), {threshold: 0.1});
+  document.querySelectorAll('.fade-up').forEach(el => io.observe(el));
+  setTimeout(()=>document.querySelectorAll('.fade-up').forEach(el=>{
+    if(el.getBoundingClientRect().top < window.innerHeight) el.classList.add('on');
+  }), 80);
+})();
+</script>
+</body>
+</html>
