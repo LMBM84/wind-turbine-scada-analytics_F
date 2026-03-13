@@ -1,0 +1,154 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+#  Wind Turbine SCADA Analytics — Local Development Stack
+# ─────────────────────────────────────────────────────────────
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-logging: &logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+
+  # ── TimescaleDB ────────────────────────────────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    <<: [*restart, *logging]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scada}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scada}
+      POSTGRES_DB: ${POSTGRES_DB:-scada_db}
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./infra/timescaledb/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./infra/timescaledb/schema.sql:/docker-entrypoint-initdb.d/02_schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redpanda (Kafka-compatible) ────────────────────────────
+  redpanda:
+    image: redpandadata/redpanda:latest
+    <<: [*restart, *logging]
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --schema-registry-addr http://0.0.0.0:8081
+      - --pandaproxy-addr http://0.0.0.0:8082
+      - --advertise-pandaproxy-addr http://localhost:8082
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    ports:
+      - "19092:19092"   # External Kafka
+      - "9092:9092"     # Internal Kafka
+      - "8081:8081"     # Schema Registry
+      - "8082:8082"     # HTTP Proxy
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redpanda-console:
+    image: redpandadata/console:latest
+    <<: [*restart, *logging]
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  # ── Redis ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    <<: [*restart, *logging]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── MinIO (Object Storage) ────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    <<: [*restart, *logging]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"    # S3 API
+      - "9001:9001"    # Console UI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      retries: 5
+
+  # ── MLflow ────────────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    <<: [*restart, *logging]
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://scada:scada@timescaledb/scada_db
+      --default-artifact-root s3://scada-models
+      --host 0.0.0.0
+      --port 5001
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    ports:
+      - "5001:5001"
+
+  # ── Grafana ───────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    <<: [*restart, *logging]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - timescaledb
+    ports:
+      - "3001:3000"
+
+volumes:
+  timescale_data:
+  redpanda_data:
+  redis_data:
+  minio_data:
+  grafana_data:
+
+networks:
+  default:
+    name: scada-net
