@@ -16,10 +16,6 @@
 
 Built on real open-source SCADA data · IEC 61400-12-1 compliant · Cloud-native architecture
 
-<br/>
-
-![Dashboard Preview](docs/assets/dashboard-preview.png)
-
 </div>
 
 ---
